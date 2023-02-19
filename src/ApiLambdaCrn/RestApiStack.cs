@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Amazon.CDK;
 using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.Lambda;
@@ -24,25 +25,72 @@ public class RestApiStack : Stack
             {
                 StageName = deploymentStage,
                 TracingEnabled = true,
+            },
+            DefaultCorsPreflightOptions = new CorsOptions
+            {
+                AllowOrigins = Cors.ALL_ORIGINS,
+                AllowMethods = Cors.ALL_METHODS,
+                AllowHeaders = Cors.DEFAULT_HEADERS,
             }
         });
 
-        var helloResource = restApi.Root.AddResource("hello");
-        helloResource.AddCorsPreflight(new CorsOptions
+        Model responseModel = restApi.AddModel("ResponseModel", Utility.GetResponseModelOptions());
+        Model errorResponseModel = restApi.AddModel("ErrorResponseModel", Utility.GetErrorResponseModelOptions());
+        var methodOptions = new MethodOptions
         {
-            AllowOrigins = Cors.ALL_ORIGINS,
-            AllowMethods = Cors.ALL_METHODS,
-            AllowHeaders = Cors.DEFAULT_HEADERS,
-        });
-        helloResource.AddMethod("GET", new LambdaIntegration(helloLambda));
+            MethodResponses = new IMethodResponse[]
+            {
+                new MethodResponse
+                {
+                    StatusCode = "200",
+                    ResponseModels = new Dictionary<string, IModel>
+                    {
+                        { "application/json", responseModel }
+                    },
+                    ResponseParameters = new Dictionary<string, bool>
+                    {
+                        { "method.response.header.Content-Type", true },
+                        { "method.response.header.Access-Control-Allow-Origin", true },
+                        { "method.response.header.Access-Control-Allow-Credentials", true }
+                    }
+                },
+                new MethodResponse
+                {
+                    StatusCode = "400",
+                    ResponseModels = new Dictionary<string, IModel>
+                    {
+                        { "application/json", errorResponseModel }
+                    },
+                    ResponseParameters = new Dictionary<string, bool>
+                    {
+                        { "method.response.header.Content-Type", true },
+                        { "method.response.header.Access-Control-Allow-Origin", true },
+                        { "method.response.header.Access-Control-Allow-Credentials", true }
+                    }
+                },
+                new MethodResponse
+                {
+                    StatusCode = "500",
+                    ResponseModels = new Dictionary<string, IModel>
+                    {
+                        { "application/json", errorResponseModel }
+                    },
+                    ResponseParameters = new Dictionary<string, bool>
+                    {
+                        { "method.response.header.Content-Type", true },
+                        { "method.response.header.Access-Control-Allow-Origin", true },
+                        { "method.response.header.Access-Control-Allow-Credentials", true }
+                    }
+                }
+            }
+        };
+
+        var helloResource = restApi.Root.AddResource("hello");
+        var helloIntegration = new LambdaIntegration(helloLambda, Utility.GetLambdaIntegrationOptions());
+        helloResource.AddMethod("GET", helloIntegration, methodOptions);
 
         var userResource = restApi.Root.AddResource("user");
-        userResource.AddCorsPreflight(new CorsOptions
-        {
-            AllowOrigins = Cors.ALL_ORIGINS,
-            AllowMethods = Cors.ALL_METHODS,
-            AllowHeaders = Cors.DEFAULT_HEADERS,
-        });
-        userResource.AddMethod("POST", new LambdaIntegration(userLambda));
+        var userIntegration = new LambdaIntegration(userLambda, Utility.GetLambdaIntegrationOptions());
+        userResource.AddMethod("POST", userIntegration, methodOptions);
     }
 }
